@@ -1,363 +1,254 @@
-\# YC Diploma
+# Дипломная работа по профессии «Системный администратор»
+
+---
+
+### Задача
+Ключевая задача — разработать отказоустойчивую инфраструктуру для сайта, включающую мониторинг, сбор логов и резервное копирование основных данных. Инфраструктура должна размещаться в Yandex Cloud и отвечать минимальным стандартам безопасности: запрещается выкладывать токен от облака в git. Используйте инструкцию.
+
+Перед началом работы над дипломным заданием изучите Инструкция по экономии облачных ресурсов.
+
+Инфраструктура
+Для развёртки инфраструктуры используйте Terraform и Ansible.
+
+Не используйте для ansible inventory ip-адреса! Вместо этого используйте fqdn имена виртуальных машин в зоне ".ru-central1.internal". Пример: example.ru-central1.internal - для этого достаточно при создании ВМ указать name=example, hostname=examle !!
+
+Важно: используйте по-возможности минимальные конфигурации ВМ:2 ядра 20% Intel ice lake, 2-4Гб памяти, 10hdd, прерываемая.
+
+Так как прерываемая ВМ проработает не больше 24ч, перед сдачей работы на проверку дипломному руководителю сделайте ваши ВМ постоянно работающими.
+
+Ознакомьтесь со всеми пунктами из этой секции, не беритесь сразу выполнять задание, не дочитав до конца. Пункты взаимосвязаны и могут влиять друг на друга.
+
+Сайт
+Создайте две ВМ в разных зонах, установите на них сервер nginx, если его там нет. ОС и содержимое ВМ должно быть идентичным, это будут наши веб-сервера.
+
+Используйте набор статичных файлов для сайта. Можно переиспользовать сайт из домашнего задания.
+
+Виртуальные машины не должны обладать внешним Ip-адресом, те находится во внутренней сети. Доступ к ВМ по ssh через бастион-сервер. Доступ к web-порту ВМ через балансировщик yandex cloud.
+
+Настройка балансировщика:
+
+Создайте Target Group, включите в неё две созданных ВМ.
+
+Создайте Backend Group, настройте backends на target group, ранее созданную. Настройте healthcheck на корень (/) и порт 80, протокол HTTP.
+
+Создайте HTTP router. Путь укажите — /, backend group — созданную ранее.
+
+Создайте Application load balancer для распределения трафика на веб-сервера, созданные ранее. Укажите HTTP router, созданный ранее, задайте listener тип auto, порт 80.
+
+Протестируйте сайт curl -v <публичный IP балансера>:80
+
+Мониторинг
+Создайте ВМ, разверните на ней Zabbix. На каждую ВМ установите Zabbix Agent, настройте агенты на отправление метрик в Zabbix.
+
+Настройте дешборды с отображением метрик, минимальный набор — по принципу USE (Utilization, Saturation, Errors) для CPU, RAM, диски, сеть, http запросов к веб-серверам. Добавьте необходимые tresholds на соответствующие графики.
+
+Логи
+Cоздайте ВМ, разверните на ней Elasticsearch. Установите filebeat в ВМ к веб-серверам, настройте на отправку access.log, error.log nginx в Elasticsearch.
+
+Создайте ВМ, разверните на ней Kibana, сконфигурируйте соединение с Elasticsearch.
+
+Сеть
+Разверните один VPC. Сервера web, Elasticsearch поместите в приватные подсети. Сервера Zabbix, Kibana, application load balancer определите в публичную подсеть.
+
+Настройте Security Groups соответствующих сервисов на входящий трафик только к нужным портам.
+
+Настройте ВМ с публичным адресом, в которой будет открыт только один порт — ssh. Эта вм будет реализовывать концепцию bastion host . Синоним "bastion host" - "Jump host". Подключение ansible к серверам web и Elasticsearch через данный bastion host можно сделать с помощью ProxyCommand . Допускается установка и запуск ansible непосредственно на bastion host.(Этот вариант легче в настройке)
+
+Исходящий доступ в интернет для ВМ внутреннего контура через NAT-шлюз.
+
+Резервное копирование
+Создайте snapshot дисков всех ВМ. Ограничьте время жизни snaphot в неделю. Сами snaphot настройте на ежедневное копирование.
 
 
 
-\## Цель работы
-
-Развернуть в Yandex Cloud инфраструктурный стенд с использованием Terraform и Ansible, включающий:
-
-\- bastion host;
-
-\- 2 web-сервера с nginx;
-
-\- Application Load Balancer;
-
-\- Zabbix server и Zabbix agents;
-
-\- Elasticsearch + Kibana + Filebeat;
-
-\- ежедневные snapshot с хранением 7 дней.
-
-
-
-\## Архитектура решения
+### Архитектура решения
 
 Стенд развёрнут в одном VPC с разделением на публичные и приватные подсети.
 
+### Публичный контур
 
+- bastion — административный доступ по SSH
+- zabbix — сервер мониторинга с web UI
+- kibana — web UI для просмотра логов
+- ALB — публикация web-приложения наружу
 
-\### Публичный контур
+### Приватный контур
 
-\- \*\*bastion\*\* — административный доступ по SSH;
+- web-a — web-сервер nginx
+- web-b — web-сервер nginx
+- elastic — сервер Elasticsearch
 
-\- \*\*zabbix\*\* — сервер мониторинга с web UI;
+### Взаимодействие компонентов
 
-\- \*\*kibana\*\* — web UI для просмотра логов;
+- SSH-доступ выполняется через bastion
+- ALB балансирует трафик между web-a и web-b
+- Zabbix мониторит bastion, web-a, web-b, elastic, kibana
+- Filebeat собирает nginx access/error logs с web-a и web-b и отправляет их в Elasticsearch
+- Kibana используется для просмотра логов
+- Для всех ВМ настроено ежедневное резервное копирование через snapshot schedule
 
-\- \*\*ALB\*\* — публикация web-приложения наружу.
+## Публичные адреса и ссылки
 
+- Web через ALB: http://158.160.204.211
+- Zabbix: http://93.77.190.163/zabbix/
+- Kibana: http://89.169.183.108:5601
+- Bastion SSH: 93.77.191.90
 
+## Внутренние IP
 
-\### Приватный контур
+- bastion — 10.10.10.10
+- zabbix — 10.10.10.30
+- elastic — 10.10.20.32
+- kibana — 10.10.11.27
+- web-a — 10.10.20.11
+- web-b — 10.10.30.21
 
-\- \*\*web-a\*\* — web-сервер nginx;
+## Список ресурсов
 
-\- \*\*web-b\*\* — web-сервер nginx;
+### ВМ
 
-\- \*\*elastic\*\* — сервер Elasticsearch.
+- bastion
+- web-a
+- web-b
+- zabbix
+- elastic
+- kibana
 
+### Сетевые ресурсы
 
+- VPC network
+- public-a
+- public-b
+- private-a
+- private-b
+- NAT Gateway
+- private route table
 
-\### Взаимодействие компонентов
+### Security Groups
 
-\- SSH-доступ выполняется через bastion;
+- yc-diplom-sg-bastion
+- yc-diplom-sg-web
+- yc-diplom-sg-zabbix
+- yc-diplom-sg-elastic
+- yc-diplom-sg-kibana
+- yc-diplom-sg-alb
 
-\- ALB балансирует трафик между web-a и web-b;
+### Балансировка
 
-\- Zabbix мониторит bastion, web-a, web-b, elastic, kibana;
+- target group
+- backend group
+- http router
+- virtual host
+- application load balancer
 
-\- Filebeat собирает nginx access/error logs с web-a и web-b и отправляет их в Elasticsearch;
+### Backup
 
-\- Kibana используется для просмотра логов;
+- snapshot schedule yc-diplom-daily-snapshots
 
-\- Для всех ВМ настроено ежедневное резервное копирование через snapshot schedule.
-
-
-
-\## Публичные адреса и ссылки
-
-\- \*\*Web через ALB\*\*: `http://158.160.204.211`
-
-\- \*\*Zabbix\*\*: `http://93.77.190.163/zabbix/`
-
-\- \*\*Kibana\*\*: `http://89.169.183.108:5601`
-
-\- \*\*Bastion SSH\*\*: `93.77.191.90`
-
-
-
-\## Внутренние IP
-
-\- bastion — `10.10.10.10`
-
-\- zabbix — `10.10.10.30`
-
-\- elastic — `10.10.20.32`
-
-\- kibana — `10.10.11.27`
-
-\- web-a — `10.10.20.11`
-
-\- web-b — `10.10.30.21`
-
-
-
-\## Список ресурсов
-
-\### ВМ
-
-\- bastion
-
-\- web-a
-
-\- web-b
-
-\- zabbix
-
-\- elastic
-
-\- kibana
-
-
-
-\### Сетевые ресурсы
-
-\- VPC network
-
-\- public-a
-
-\- public-b
-
-\- private-a
-
-\- private-b
-
-\- NAT Gateway
-
-\- private route table
-
-
-
-\### Security Groups
-
-\- yc-diplom-sg-bastion
-
-\- yc-diplom-sg-web
-
-\- yc-diplom-sg-zabbix
-
-\- yc-diplom-sg-elastic
-
-\- yc-diplom-sg-kibana
-
-\- yc-diplom-sg-alb
-
-
-
-\### Балансировка
-
-\- target group
-
-\- backend group
-
-\- http router
-
-\- virtual host
-
-\- application load balancer
-
-
-
-\### Backup
-
-\- snapshot schedule `yc-diplom-daily-snapshots`
-
-
-
-\## Terraform
+## Terraform
 
 Инфраструктура описана Terraform-кодом:
 
-\- сеть;
+- сеть
+- NAT Gateway
+- route table
+- Security Groups
+- виртуальные машины
+- ALB
+- snapshot schedule
 
-\- NAT Gateway;
-
-\- route table;
-
-\- Security Groups;
-
-\- виртуальные машины;
-
-\- ALB;
-
-\- snapshot schedule.
-
-
-
-\## Ansible
+## Ansible
 
 Конфигурация серверов выполняется через Ansible:
 
-\- базовая настройка хостов;
+- базовая настройка хостов
+- установка и настройка nginx
+- установка Zabbix server
+- установка Zabbix agents
+- установка Docker
+- запуск Elasticsearch и Kibana в Docker
+- настройка Filebeat
 
-\- установка и настройка nginx;
+## Мониторинг
 
-\- установка Zabbix server;
+Развёрнут Zabbix server. На bastion, web-a, web-b, elastic и kibana установлены агенты
 
-\- установка Zabbix agents;
+Собран USE-dashboard, включающий:
 
-\- установка Docker;
+- CPU
+- RAM
+- Disk
+- HTTP requests/sec
+- Active connections
+- Connections by state
+- Network traffic
+- Problems / Trigger overview
 
-\- запуск Elasticsearch и Kibana в Docker;
-
-\- настройка Filebeat.
-
-
-
-\## Мониторинг
-
-Развёрнут Zabbix server. На bastion, web-a, web-b, elastic и kibana установлены агенты. Собран USE-dashboard, включающий:
-
-\- CPU;
-
-\- RAM;
-
-\- Disk;
-
-\- HTTP requests/sec;
-
-\- Active connections;
-
-\- Connections by state;
-
-\- Network traffic;
-
-\- Problems / Trigger overview.
-
-
-
-\## Логи
+## Логи
 
 Развёрнут стек:
 
-\- Elasticsearch;
+- Elasticsearch
+- Kibana
+- Filebeat
 
-\- Kibana;
+Filebeat собирает nginx access/error logs с web-серверов и отправляет их в Elasticsearch. Логи доступны в Kibana через Discover
 
-\- Filebeat.
-
-
-
-Filebeat собирает nginx access/error logs с web-серверов и отправляет их в Elasticsearch. Логи доступны в Kibana через Discover.
-
-
-
-\## Резервное копирование
+## Резервное копирование
 
 Настроено расписание snapshot:
 
-\- имя: `yc-diplom-daily-snapshots`;
+- имя: yc-diplom-daily-snapshots
+- запуск: ежедневно
+- хранение: 7 дней
 
-\- запуск: ежедневно;
-
-\- хранение: 7 дней.
-
-
-
-\## Подтверждение работоспособности ресурсов
+## Подтверждение работоспособности ресурсов
 
 Для ресурсов, к которым неудобно предоставлять прямой доступ, приложены:
 
-\- скриншоты;
+- скриншоты
+- команды проверки
+- stdout/stderr
+- вывод сервисных команд
 
-\- команды проверки;
+Подробности см. в [docs/checks.md](docs/checks.md).
 
-\- stdout/stderr;
-
-\- вывод сервисных команд.
-
-
-
-Подробности см. в \[docs/checks.md](docs/checks.md).
-
-
-
-\## Скриншоты
-
-
-
-\### USE Dashboard
-
-!\[USE Dashboard](docs/screenshots/06-use-dashboard.png)
-
-
-
-\### Kibana Discover
-
-!\[Kibana Discover](docs/screenshots/07-kibana-discover.png)
-
-
-
-\### Snapshot Schedule
-
-!\[Snapshot Schedule](docs/screenshots/09-snapshot-schedule.png)
-
-
-
-\## Структура репозитория
-
-```text
+## Структура репозитория
 
 terraform/
-
 ansible/
-
 docs/
-
 site/
-
 README.md
-
 .gitignore
 
+---
+
+![1](./img/01-vms.png)
+
+![2](./img/02-alb-web.png)
+
+![3](./img/03-curl-alb-check.png)
+
+![4](./img/04-bastion-ssh.png)
+
+![5](./img/05-zabbix-hosts.png)
+
+![6](./img/06-use-dashboard-overview.png)
+
+![7](./img/07-use-dashboard-details.png)
+
+![8](./img/08-kibana-discover.png)
+
+![9](./img/09-elasticsearch-check.png)
+
+![10](./img/10-nginx-stub-status.png)
+
+![11](./img/11-snapshot-schedule.png)
+
+![12](./img/12-nginx-stub-status-check.png)
+
+![13](./img/13-snapshot-schedule-check.png)
 
 
-# Проверка работоспособности ресурсов
 
-## 1. Web через ALB
-Команда:
-bash
-curl -I http://158.160.204.211
-
-
-
-## Скриншоты и подтверждение работы стенда
-
-### 1. Список виртуальных машин
-![VMs](docs/screenshots/01-vms.png)
-
-### 2. Web через Application Load Balancer
-![ALB Web](docs/screenshots/02-alb-web.png)
-
-### 3. Проверка web через ALB командой curl
-![ALB curl check](docs/screenshots/03-curl-alb-check.png)
-
-### 4. Подключение к bastion по SSH
-![Bastion SSH](docs/screenshots/04-bastion-ssh.png)
-
-### 5. Хосты в Zabbix
-![Zabbix Hosts](docs/screenshots/05-zabbix-hosts.png)
-
-### 6. USE Dashboard — общий вид
-![USE Dashboard Overview](docs/screenshots/06-use-dashboard-overview.png)
-
-### 7. USE Dashboard — детальная часть
-![USE Dashboard Details](docs/screenshots/07-use-dashboard-details.png)
-
-### 8. Kibana Discover
-![Kibana Discover](docs/screenshots/08-kibana-discover.png)
-
-### 9. Проверка Elasticsearch
-![Elasticsearch Check](docs/screenshots/09-elasticsearch-check.png)
-
-### 10. nginx stub_status
-![nginx stub_status](docs/screenshots/10-nginx-stub-status.png)
-
-### 11. Snapshot schedule
-![Snapshot Schedule](docs/screenshots/11-snapshot-schedule.png)
-
-### 12. Проверка nginx stub_status
-![nginx stub_status check](docs/screenshots/12-nginx-stub-status-check.png)
-
-### 13. Проверка snapshot schedule
-![Snapshot Schedule Check](docs/screenshots/13-snapshot-schedule-check.png)
