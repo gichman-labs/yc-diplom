@@ -17,3 +17,5 @@ authorized_key.json
 Thumbs.db
 Desktop.ini
 *.bak
+ansible/group_vars/all.yml
+docs/screenshots/*Проверка nginx stub_status.png
