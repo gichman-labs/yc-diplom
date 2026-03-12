@@ -1,0 +1,5 @@
+cloud_id                 = "b1g0htn1tevglgk9ekj6"
+folder_id                = "b1gkfr6hiumqnf4k7g4d"
+default_zone             = "ru-central1-a"
+service_account_key_file = "C:/path/to/terraform-sa-key.json"
+admin_ipv4_cidr          = "0.0.0.0/0"
