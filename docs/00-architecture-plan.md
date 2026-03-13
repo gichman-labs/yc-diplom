@@ -1,8 +1,8 @@
-\# Архитектурный план дипломного проекта Yandex Cloud
+&#x20;Архитектурный план дипломного проекта Yandex Cloud
 
 
 
-\## 1. Цель проекта
+&#x20;1. Цель проекта
 
 
 
@@ -10,181 +10,179 @@
 
 
 
-\## 2. Обязательные компоненты
+&#x20;2. Обязательные компоненты
 
 
 
-\* 2 web-сервера nginx в разных зонах
+&#x20;2 web-сервера nginx в разных зонах
 
-\* bastion host
+&#x20;bastion host
 
-\* Application Load Balancer
+&#x20;Application Load Balancer
 
-\* Zabbix
+&#x20;Zabbix
 
-\* Elasticsearch
+&#x20;Elasticsearch
 
-\* Kibana
+&#x20;Kibana
 
-\* Filebeat на web-серверах
+&#x20;Filebeat на web-серверах
 
-\* NAT Gateway для приватного контура
+&#x20;NAT Gateway для приватного контура
 
-\* Snapshot schedule для всех дисков
+&#x20;Snapshot schedule для всех дисков
 
 
 
-\## 3. Принятые имена ВМ
+&#x20;3. Принятые имена ВМ
 
 
 
-\* bastion
+&#x20;bastion
 
-\* web-a
+&#x20;web-a
 
-\* web-b
+&#x20;web-b
 
-\* zabbix
+&#x20;zabbix
 
-\* elastic
+&#x20;elastic
 
-\* kibana
+&#x20;kibana
 
 
 
-\## 4. Ожидаемые внутренние FQDN
+&#x20;4. Ожидаемые внутренние FQDN
 
 
 
-\* bastion.ru-central1.internal
+&#x20;bastion.ru-central1.internal
 
-\* web-a.ru-central1.internal
+&#x20;web-a.ru-central1.internal
 
-\* web-b.ru-central1.internal
+&#x20;web-b.ru-central1.internal
 
-\* zabbix.ru-central1.internal
+&#x20;zabbix.ru-central1.internal
 
-\* elastic.ru-central1.internal
+&#x20;elastic.ru-central1.internal
 
-\* kibana.ru-central1.internal
+&#x20;kibana.ru-central1.internal
 
 
 
-\## 5. Размещение по зонам
+&#x20;5. Размещение по зонам
 
 
 
-\* bastion: ru-central1-a
+&#x20;bastion: ru-central1-a
 
-\* web-a: ru-central1-a
+&#x20;web-a: ru-central1-a
 
-\* web-b: ru-central1-b
+&#x20;web-b: ru-central1-b
 
-\* zabbix: ru-central1-a
+&#x20;zabbix: ru-central1-a
 
-\* elastic: ru-central1-a
+&#x20;elastic: ru-central1-a
 
-\* kibana: ru-central1-b
+&#x20;kibana: ru-central1-b
 
 
 
-\## 6. Подсети
+&#x20;6. Подсети
 
 
 
-\* public-a: 10.10.10.0/24
+&#x20;public-a: 10.10.10.0/24
 
-\* public-b: 10.10.11.0/24
+&#x20;public-b: 10.10.11.0/24
 
-\* private-a: 10.10.20.0/24
+&#x20;private-a: 10.10.20.0/24
 
-\* private-b: 10.10.30.0/24
+&#x20;private-b: 10.10.30.0/24
 
 
 
-\## 7. Размещение ресурсов по подсетям
+&#x20;7. Размещение ресурсов по подсетям
 
 
 
-\* bastion -> public-a
+&#x20;bastion -> public-a
 
-\* zabbix -> public-a
+&#x20;zabbix -> public-a
 
-\* kibana -> public-b
+&#x20;kibana -> public-b
 
-\* ALB -> public-a + public-b
+&#x20;ALB -> public-a + public-b
 
-\* web-a -> private-a
+&#x20;web-a -> private-a
 
-\* web-b -> private-b
+&#x20;web-b -> private-b
 
-\* elastic -> private-a
+&#x20;elastic -> private-a
 
 
 
-\## 8. Публичные IP
+&#x20;8. Публичные IP
 
 
 
-\* bastion -> да
+&#x20;bastion -> да
 
-\* zabbix -> да
+&#x20;zabbix -> да
 
-\* kibana -> да
+&#x20;kibana -> да
 
-\* web-a -> нет
+&#x20;web-a -> нет
 
-\* web-b -> нет
+&#x20;web-b -> нет
 
-\* elastic -> нет
+&#x20;elastic -> нет
 
 
 
-\## 9. Доступ
+&#x20;9. Доступ
 
 
 
-\* SSH к приватным ВМ только через bastion
+&#x20;SSH к приватным ВМ только через bastion
 
-\* HTTP к web-серверам только через ALB
+&#x20;HTTP к web-серверам только через ALB
 
-\* Исходящий интернет для private subnet через NAT Gateway
+&#x20;Исходящий интернет для private subnet через NAT Gateway
 
 
 
-\## 10. Управление конфигурацией
+&#x20;10. Управление конфигурацией
 
 
 
-\* Terraform запускается с локальной машины
+&#x20;Terraform запускается с локальной машины
 
-\* Ansible устанавливается и запускается на bastion host
+&#x20;Ansible устанавливается и запускается на bastion host
 
 
 
-\## 11. Минимальная структура репозитория
+&#x20;11. Минимальная структура репозитория
 
 
 
-\* terraform/
+&#x20;terraform/
 
-\* ansible/
+&#x20;ansible/
 
-\* docs/
+&#x20;docs/
 
-\* site/
+&#x20;site/
 
 
 
-\## 12. Что нельзя
+&#x20;12. Что нельзя
 
 
 
-\* Не использовать IP-адреса в ansible inventory
+&#x20;Не использовать IP-адреса в ansible inventory
 
-\* Не хранить токены/ключи облака в git
+&#x20;Не хранить токены/ключи облака в git
 
-\* Не назначать web-серверам публичные IP
-
-
+&#x20;Не назначать web-серверам публичные IP
 
