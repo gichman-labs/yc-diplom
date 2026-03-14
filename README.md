@@ -254,5 +254,13 @@ README.md
 
 ![13](./img/13-snapshot-schedule-check.png)
 
+![14](./img/1.png)
+
+![15](./img/2.png)
+
+![16](./img/3.png)
+
+![17](./img/4.png)
+
 
 
