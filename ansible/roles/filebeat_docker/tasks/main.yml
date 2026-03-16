@@ -1,0 +1,34 @@
+- name: Ensure Filebeat directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - /opt/filebeat
+    - /opt/filebeat/data
+
+- name: Deploy filebeat.yml
+  ansible.builtin.template:
+    src: filebeat.yml.j2
+    dest: /opt/filebeat/filebeat.yml
+    mode: '0644'
+
+- name: Remove old Filebeat container if exists
+  ansible.builtin.shell: |
+    docker rm -f filebeat >/dev/null 2>&1 || true
+
+- name: Pull Filebeat Docker image
+  ansible.builtin.command: docker pull {{ filebeat_docker_image }}
+
+- name: Run Filebeat container
+  ansible.builtin.shell: |
+    docker run -d \
+      --name filebeat \
+      --user root \
+      --restart unless-stopped \
+      -v /opt/filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro \
+      -v /opt/filebeat/data:/usr/share/filebeat/data \
+      -v /var/log/nginx:/var/log/nginx:ro \
+      {{ filebeat_docker_image }}
+  args:
+    executable: /bin/bash

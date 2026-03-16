@@ -1,0 +1,56 @@
+- name: Apply common configuration to all hosts
+  hosts: all
+  become: true
+  gather_facts: true
+  roles:
+    - common
+
+- name: Configure nginx on web hosts
+  hosts: web
+  become: true
+  gather_facts: true
+  roles:
+    - nginx
+
+- name: Install Zabbix server
+  hosts: zabbix
+  become: true
+  gather_facts: true
+  roles:
+    - zabbix_server
+
+- name: Install Zabbix agents on monitored hosts
+  hosts: bastion:web:elastic:kibana
+  become: true
+  gather_facts: true
+  roles:
+    - zabbix_agent
+
+- name: Install Docker on elastic, kibana and web
+  hosts: elastic:kibana:web
+  become: true
+  gather_facts: true
+  roles:
+    - docker_common
+
+- name: Run Elasticsearch in Docker
+  hosts: elastic
+  become: true
+  gather_facts: true
+  roles:
+    - elasticsearch_docker
+
+- name: Run Kibana in Docker
+  hosts: kibana
+  become: true
+  gather_facts: true
+  roles:
+    - kibana_docker
+
+- name: Run Filebeat in Docker on web hosts
+  hosts: web
+  become: true
+  gather_facts: true
+  roles:
+    - filebeat_docker
+

@@ -1,0 +1,81 @@
+- name: Ensure Elasticsearch base directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - /opt/elasticsearch
+    - /opt/elasticsearch/config
+
+- name: Ensure Elasticsearch data and log directories exist with correct ownership
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "1000"
+    group: "0"
+    mode: '0775'
+  loop:
+    - /opt/elasticsearch/data
+    - /opt/elasticsearch/logs
+
+- name: Set vm.max_map_count
+  ansible.builtin.sysctl:
+    name: vm.max_map_count
+    value: '1048576'
+    state: present
+    reload: true
+
+- name: Deploy elasticsearch.yml
+  ansible.builtin.template:
+    src: elasticsearch.yml.j2
+    dest: /opt/elasticsearch/config/elasticsearch.yml
+    mode: '0644'
+
+- name: Remove old Elasticsearch container if exists
+  ansible.builtin.shell: |
+    docker rm -f elasticsearch >/dev/null 2>&1 || true
+
+- name: Pull Elasticsearch Docker image
+  ansible.builtin.command: docker pull {{ elasticsearch_docker_image }}
+
+- name: Run Elasticsearch container
+  ansible.builtin.shell: |
+    docker run -d \
+      --name elasticsearch \
+      --restart unless-stopped \
+      --user 1000:0 \
+      -p 9200:9200 \
+      -e ES_JAVA_OPTS="-Xms1g -Xmx1g" \
+      -v /opt/elasticsearch/config/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro \
+      -v /opt/elasticsearch/data:/usr/share/elasticsearch/data \
+      -v /opt/elasticsearch/logs:/usr/share/elasticsearch/logs \
+      {{ elasticsearch_docker_image }}
+  args:
+    executable: /bin/bash
+
+- name: Wait for Elasticsearch port 9200
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: 9200
+    delay: 15
+    timeout: 180
+
+- name: Wait for Elasticsearch HTTP API on localhost
+  ansible.builtin.uri:
+    url: http://127.0.0.1:9200
+    method: GET
+    status_code: 200
+  register: elastic_local_http
+  retries: 30
+  delay: 5
+  until: elastic_local_http.status == 200
+
+- name: Wait for Elasticsearch HTTP API on private IP
+  ansible.builtin.uri:
+    url: "http://{{ elasticsearch_private_ip }}:9200"
+    method: GET
+    status_code: 200
+  register: elastic_private_http
+  retries: 30
+  delay: 5
+  until: elastic_private_http.status == 200

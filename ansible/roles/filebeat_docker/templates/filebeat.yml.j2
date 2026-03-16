@@ -1,0 +1,23 @@
+filebeat.modules:
+  - module: nginx
+    access:
+      enabled: true
+      var.paths: ["/var/log/nginx/access.log*"]
+    error:
+      enabled: true
+      var.paths: ["/var/log/nginx/error.log*"]
+
+output.elasticsearch:
+  hosts: ["http://{{ elasticsearch_private_ip }}:9200"]
+
+setup.kibana:
+  host: "{{ kibana_private_ip }}:5601"
+
+setup.template.settings:
+  index.number_of_replicas: 0
+
+processors:
+  - add_host_metadata: ~
+  - add_cloud_metadata: ~
+
+logging.level: info

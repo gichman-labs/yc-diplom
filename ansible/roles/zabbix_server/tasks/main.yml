@@ -1,0 +1,103 @@
+- name: Download Zabbix repository package
+  ansible.builtin.get_url:
+    url: "{{ zabbix_repo_deb }}"
+    dest: /tmp/zabbix-release_latest+ubuntu22.04_all.deb
+    mode: '0644'
+
+- name: Install Zabbix repository package
+  ansible.builtin.apt:
+    deb: /tmp/zabbix-release_latest+ubuntu22.04_all.deb
+
+- name: Update apt cache after Zabbix repo installation
+  ansible.builtin.apt:
+    update_cache: true
+
+- name: Install MariaDB server
+  ansible.builtin.apt:
+    name:
+      - mariadb-server
+      - python3-pymysql
+    state: present
+
+- name: Install Zabbix server, frontend and agent packages
+  ansible.builtin.apt:
+    name:
+      - zabbix-server-mysql
+      - zabbix-frontend-php
+      - zabbix-apache-conf
+      - zabbix-sql-scripts
+      - zabbix-agent
+    state: present
+
+- name: Ensure MariaDB is enabled and started
+  ansible.builtin.service:
+    name: mariadb
+    state: started
+    enabled: true
+
+- name: Create Zabbix database if it does not exist
+  ansible.builtin.shell: |
+    mysql -u root -p'{{ zabbix_root_db_password }}' -Nse "CREATE DATABASE IF NOT EXISTS {{ zabbix_server_db_name }} CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;"
+  changed_when: false
+
+- name: Create or update Zabbix database user and grant privileges
+  ansible.builtin.shell: |
+    mysql -u root -p'{{ zabbix_root_db_password }}' -Nse "
+    CREATE USER IF NOT EXISTS '{{ zabbix_server_db_user }}'@'localhost' IDENTIFIED BY '{{ zabbix_server_db_password }}';
+    ALTER USER '{{ zabbix_server_db_user }}'@'localhost' IDENTIFIED BY '{{ zabbix_server_db_password }}';
+    GRANT ALL PRIVILEGES ON {{ zabbix_server_db_name }}.* TO '{{ zabbix_server_db_user }}'@'localhost';
+    FLUSH PRIVILEGES;"
+  changed_when: false
+
+- name: Check how many tables already exist in Zabbix database
+  ansible.builtin.shell: |
+    mysql -u root -p'{{ zabbix_root_db_password }}' -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='{{ zabbix_server_db_name }}';"
+  register: zabbix_table_count
+  changed_when: false
+
+- name: Import Zabbix database schema only if database is empty
+  ansible.builtin.shell: |
+    zcat /usr/share/zabbix-sql-scripts/mysql/server.sql.gz | mysql --protocol=socket -u {{ zabbix_server_db_user }} -p'{{ zabbix_server_db_password }}' {{ zabbix_server_db_name }}
+  when: zabbix_table_count.stdout == "0"
+
+- name: Deploy zabbix_server.conf
+  ansible.builtin.template:
+    src: zabbix_server.conf.j2
+    dest: /etc/zabbix/zabbix_server.conf
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Disable default Apache site
+  ansible.builtin.file:
+    path: /etc/apache2/sites-enabled/000-default.conf
+    state: absent
+
+- name: Ensure Apache is enabled and started
+  ansible.builtin.service:
+    name: apache2
+    state: restarted
+    enabled: true
+
+- name: Ensure Zabbix runtime and log directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: zabbix
+    group: zabbix
+    mode: '0755'
+  loop:
+    - /run/zabbix
+    - /var/log/zabbix
+
+- name: Ensure Zabbix server is enabled and started
+  ansible.builtin.service:
+    name: zabbix-server
+    state: started
+    enabled: true
+
+- name: Ensure Zabbix agent is enabled and started on Zabbix server
+  ansible.builtin.service:
+    name: zabbix-agent
+    state: started
+    enabled: true
